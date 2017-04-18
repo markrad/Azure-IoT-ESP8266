@@ -24,13 +24,18 @@
  */
 
 // Next five variables need to have your appropriate values added
-const String SSID = "<Wi-Fi SSID>";
-const String PASSWORD = "<Wi-Fi Password>";
-// Connection string int the form HostName=myhost.azure-devices.net;DeviceId=mydevice;SharedAccessKey=sharedaccesskey
+const String SSID = "<SSID>";
+const String PASSWORD = "<Password>";
+// Connection string in the form HostName=myhost.azure-devices.net;DeviceId=mydevice;SharedAccessKey=sharedaccesskey
 // This can be acquired from the Azure Portal or the Device Explorer
 const String CONNECTIONSTRING = "<Connection String>";
 const uint INTERVAL = 20;             // SAS token validity period in minutes
 const int REFRESHPERCENTAGE = 80;     // Percentage of SAS token validity used when reauthentication is attempted
+const int MISSEDTOOMANY = 10;         // Reconnect to MQTT when consecutively missed this many messages 
+const int BLINKER = 0;				  // GPIO of LED to indicate activity
+const int BLINKTIME = 700;
+const int BLINKOFF = HIGH;
+const int BLINKON = LOW;
 
 WiFiUDP ntpUDP;
 WiFiClientSecure net;
@@ -52,6 +57,13 @@ void printBinary(uint8_t *data, size_t dataLength)
   }
   
   Serial.println();
+}
+
+void softwareReboot()
+{
+  Serial.println("Rebooting...");
+  wdt_enable(WDTO_250MS);
+  while(true);
 }
 
 void setupWiFi(const String ssid, const String password)
@@ -84,14 +96,35 @@ void setupMQTT(uint interval)
   
   csHelper->generatePassword(mqttServer, mqttClientId, csHelper->getKeywordValue("SharedAccessKey"), epochTime, mqttPassword);
   refreshTime = now + (interval * 60 * REFRESHPERCENTAGE / 100);
+  Serial.print("Time is now ");
+  Serial.println(now, DEC);
+  Serial.print("SAS token expires at ");
+  Serial.println(epochTime, DEC);
+  Serial.print("Will refresh at ");
+  Serial.println(refreshTime, DEC);
+  
+//  Serial.print("MQTT_Server=");
+//  Serial.println(mqttServer);
+//  Serial.print("MQTT_ClientId=");
+//  Serial.println(mqttClientId);
+//  Serial.print("MQTT_UserName=");
+//  Serial.println(mqttUserName);
+//  Serial.print("MQTT_Password=");
+//  Serial.println(mqttPassword);
 
   uint8_t ret;
   client.begin(mqttServer.c_str(), 8883, net);
 
+  int counter = 20;
+  
+  // If we can't connect in 20 attempts then reboot
   while (!client.connect(mqttClientId.c_str(), mqttUserName.c_str(), mqttPassword.c_str()))
   {
     Serial.print(".");
     delay(1000);    
+
+    if (0 >= --counter)
+      softwareReboot();
   }
 
   Serial.println("MQTT connected");
@@ -111,12 +144,20 @@ void setup()
   Serial.println();
   Serial.println("Start Test");
 
+  pinMode(BLINKER, OUTPUT);
+  digitalWrite(BLINKER, BLINKOFF);
   csHelper = new ConnectionStringHelper(CONNECTIONSTRING);
 
   setupWiFi(SSID, PASSWORD);
 
   timeClient.begin();
-  timeClient.update();
+
+  // Cannot continue until we have a clock update
+  while (!timeClient.update())
+  {
+    Serial.println("Initial clock update failed");
+    delay(250);
+  }
   delay(1000);
   
   setupMQTT(INTERVAL);
@@ -126,9 +167,16 @@ void loop() {
 
   static uint32_t counter = 0;
   static uint32_t lastMsg = 0;
+  static uint32_t missedMessageCount = 0;
+  static uint32_t ledOffAt = 0;
   uint32_t currMillis;
   
-  timeClient.update();
+  while (!timeClient.update())
+  {
+    Serial.println("NTP update failed");
+    delay(250);
+  }
+  
   client.loop();
 
   // Refresh the SAS token if necessary
@@ -136,12 +184,18 @@ void loop() {
   {
     Serial.println("Reconnecting to refresh SAS token");
 
-    // By hacking the MQTT library here we could improve reauthentication performance
     client.disconnect();
     setupMQTT(INTERVAL);
+    missedMessageCount = 0;
   }
 
   currMillis = millis();
+
+  if (ledOffAt && currMillis >= ledOffAt)
+  {
+    digitalWrite(BLINKER, BLINKOFF);
+    ledOffAt = 0;
+  }
   
   // Check for wrap (around every 50 days)
   if (currMillis < lastMsg)
@@ -151,10 +205,25 @@ void loop() {
   if (currMillis - lastMsg > 3000)
   {
     lastMsg = currMillis;
-    String msg = "{ \"counter\": " + String(counter++) + ", \"millis\": " + String(currMillis) + " }";
+    String msg = "{ \"counter\": " + String(counter++) + ", \"epoch\": " + String(timeClient.getEpochTime()) + ", \"millis\": " + String(currMillis) + " }";
     
     if (!client.publish(pubTopic.c_str(), msg.c_str()))
+    {
       Serial.println("Publish failed");
+
+      if (++missedMessageCount > MISSEDTOOMANY)
+      {
+        missedMessageCount = 0;
+        client.disconnect();
+        setupMQTT(INTERVAL);
+      }
+    }
+    else
+    {
+      missedMessageCount = 0;
+      digitalWrite(BLINKER, BLINKON);
+      ledOffAt = currMillis + BLINKTIME;
+    }
   }
 }
 
