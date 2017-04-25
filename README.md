@@ -4,10 +4,11 @@ This is a project that can be built and run from the Arduino IDE along with an E
 You will need to use the Arduino Library Manager to install the following libraries:
 - NTPClient [https://github.com/arduino-libraries/NTPClient](https://github.com/arduino-libraries/NTPClient)
 - MQTT [https://github.com/256dpi/arduino-mqtt](https://github.com/256dpi/arduino-mqtt)
+- WiFiManager [https://github.com/tzapu/WiFiManager](https://github.com/tzapu/WiFiManager)
 
 GitHub URLs provided only for reference.
 
 **Important** In the MQTT library, you will need to modify the definition _#define MQTT\_BUFFER\_SIZE 128_ in MQTTClient.h to read _#define MQTT\_BUFFER\_SIZE 256_ or you will not have a large enough buffer to connect to the Azure IoT hub. 
 
-Finally you will need to add the Wi-Fi SSID and password and the IoT hub connection string to the top of the .ino file.
+The first time the application is executed it will set itself up as an access point and start a webserver. Connect to the access point and enter the device's IP address into your browser to fill in the SSID, WiFi password and the Azure IoT device connection string. Thereafter this information will be used each time the device is booted relieving one from the requirement of setting it up every time.
 
