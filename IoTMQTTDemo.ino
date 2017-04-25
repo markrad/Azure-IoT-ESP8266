@@ -202,14 +202,14 @@ void setupMQTT(uint interval)
   Serial.print("Will refresh at ");
   Serial.println(refreshTime, DEC);
   
-  Serial.print("MQTT_Server=");
-  Serial.println(mqttServer);
-  Serial.print("MQTT_ClientId=");
-  Serial.println(mqttClientId);
-  Serial.print("MQTT_UserName=");
-  Serial.println(mqttUserName);
-  Serial.print("MQTT_Password=");
-  Serial.println(mqttPassword);
+//  Serial.print("MQTT_Server=");
+//  Serial.println(mqttServer);
+//  Serial.print("MQTT_ClientId=");
+//  Serial.println(mqttClientId);
+//  Serial.print("MQTT_UserName=");
+//  Serial.println(mqttUserName);
+//  Serial.print("MQTT_Password=");
+//  Serial.println(mqttPassword);
 
   uint8_t ret;
   client.begin(mqttServer.c_str(), 8883, net);
