@@ -39,12 +39,51 @@ const int BLINKON = LOW;              // Set to BLINKOFF to disable LED
 WiFiUDP ntpUDP;
 WiFiClientSecure net;
 NTPClient timeClient(ntpUDP);
-MQTTClient client;
+MQTTClient client(256);
 ConnectionStringHelper *csHelper = NULL;
 String pubTopic;
 String subTopic;
 int32_t refreshTime = 0;
 bool shouldSaveConfig = false;
+
+//
+// Code included to assist debugging
+/*
+extern "C"
+{
+void dump_buffer(uint8_t length, unsigned char *buffer)
+{
+    char hex[4];
+    
+    for (int i = 0; i < length; i += 16)
+    {
+        int j;
+        uint8_t chunk = (length - i < 16)? length - i : 16;
+        
+        for (j = i; j < i + chunk; j++)
+        {
+            sprintf(hex, " %02x", buffer[j]);
+            Serial.print(hex);
+        }
+        
+        Serial.print("  ");
+
+        if (chunk < 16)
+        {
+            for (j = chunk; j < 16; j++)
+                Serial.print("   ");
+        }
+        
+        for (j = i; j < i + chunk; j++)
+        {
+            Serial.write((isprint(buffer[j]))? buffer[j] : '.');
+        }
+        
+        Serial.println();
+    }
+}
+}
+*/
 
 //
 // Included for debug print of binary arrays
@@ -213,6 +252,8 @@ void setupMQTT(uint interval)
 
   uint8_t ret;
   client.begin(mqttServer.c_str(), 8883, net);
+  client.setOptions(240, 0, 1000);
+  client.onMessage(messageReceived);
 
   int counter = 20;
   
@@ -233,7 +274,7 @@ void setupMQTT(uint interval)
   pubTopic = "devices/" + mqttClientId + "/messages/events/";
   subTopic = "devices/" + mqttClientId + "/messages/devicebound/#";
 
-  if (!client.subscribe(subTopic.c_str()))
+  if (!client.subscribe(subTopic.c_str(), 1))
     Serial.println("Subscribe failed");
 }
 
@@ -307,7 +348,7 @@ void loop() {
     lastMsg = currMillis;
     String msg = "{ \"counter\": " + String(counter++) + ", \"epoch\": " + String(timeClient.getEpochTime()) + ", \"millis\": " + String(currMillis) + " }";
     
-    if (!client.publish(pubTopic.c_str(), msg.c_str()))
+    if (!client.publish(pubTopic.c_str(), msg.c_str(), false, 1))
     {
       Serial.println("Publish failed");
 
@@ -327,7 +368,7 @@ void loop() {
   }
 }
 
-void messageReceived(String topic, String payload, char *bytes, unsigned int length)
+void messageReceived(String &topic, String &payload)
 {
   Serial.println("Message received");
   Serial.println("\tTopic: " + topic + "\n\tPayload: " + payload);

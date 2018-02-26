@@ -8,7 +8,6 @@ You will need to use the Arduino Library Manager to install the following librar
 
 GitHub URLs provided only for reference.
 
-**Important** In the MQTT library, you will need to modify the definition _#define MQTT\_BUFFER\_SIZE 128_ in MQTTClient.h to read _#define MQTT\_BUFFER\_SIZE 256_ or you will not have a large enough buffer to connect to the Azure IoT hub. 
 
 The first time the application is executed it will set itself up as an access point and start a webserver. Connect to the access point and enter the device's IP address into your browser to fill in the SSID, WiFi password and the Azure IoT device connection string. Thereafter this information will be used each time the device is booted relieving one from the requirement of setting it up every time.
 
