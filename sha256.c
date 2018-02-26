@@ -103,9 +103,9 @@ static void normalize_key(uint8_t * const key, const char * const input_key, siz
 	}
 	else {
 		struct sha256 s;
-		sha256_init(&s);
-		sha256_update(&s, input_key, len);
-		sha256_sum(&s, key);
+		sha256Init(&s);
+		sha256Update(&s, input_key, len);
+		sha256Sum(&s, key);
 		memset(key + SHA256_DIGEST_LENGTH, '\0', BLOCK_LENGTH - SHA256_DIGEST_LENGTH);
 	}
 }
@@ -125,7 +125,7 @@ int generateHash(uint8_t *hashedDataOut, uint8_t *data, size_t dataLen, uint8_t 
 
 	struct sha256 inner_s;
 
-	sha256_init(&inner_s);
+	sha256Init(&inner_s);
 
 	uint8_t inner_key[BLOCK_LENGTH];
 	uint8_t outer_key[BLOCK_LENGTH];
@@ -135,19 +135,19 @@ int generateHash(uint8_t *hashedDataOut, uint8_t *data, size_t dataLen, uint8_t 
 		outer_key[i] = key[i] ^ OUTER_PADDING;
 	}
 
-	sha256_update(&inner_s, inner_key, BLOCK_LENGTH);
-	sha256_update(&inner_s, data, dataLen);
+	sha256Update(&inner_s, inner_key, BLOCK_LENGTH);
+	sha256Update(&inner_s, data, dataLen);
 
 	uint8_t inner_hash[SHA256_DIGEST_LENGTH];
-	sha256_sum(&inner_s, inner_hash);
+	sha256Sum(&inner_s, inner_hash);
 
 	struct sha256 outer_s;
-	sha256_init(&outer_s);
-	sha256_update(&outer_s, outer_key, BLOCK_LENGTH);
-	sha256_update(&outer_s, inner_hash, SHA256_DIGEST_LENGTH);
+	sha256Init(&outer_s);
+	sha256Update(&outer_s, outer_key, BLOCK_LENGTH);
+	sha256Update(&outer_s, inner_hash, SHA256_DIGEST_LENGTH);
 
 	uint8_t hmac[SHA256_DIGEST_LENGTH];
-	sha256_sum(&outer_s, hmac);
+	sha256Sum(&outer_s, hmac);
 
 	memcpy(hashedDataOut, hmac, SHA256_DIGEST_LENGTH);
 
@@ -155,7 +155,7 @@ int generateHash(uint8_t *hashedDataOut, uint8_t *data, size_t dataLen, uint8_t 
 }
 
 void
-sha256_init(void *ctx)
+sha256Init(void *ctx)
 {
 	struct sha256 *s = ctx;
 	s->len = 0;
@@ -170,7 +170,7 @@ sha256_init(void *ctx)
 }
 
 void
-sha256_sum(void *ctx, uint8_t md[SHA256_DIGEST_LENGTH])
+sha256Sum(void *ctx, uint8_t md[SHA256_DIGEST_LENGTH])
 {
 	struct sha256 *s = ctx;
 	int i;
@@ -185,7 +185,7 @@ sha256_sum(void *ctx, uint8_t md[SHA256_DIGEST_LENGTH])
 }
 
 void
-sha256_update(void *ctx, const void *m, unsigned long len)
+sha256Update(void *ctx, const void *m, unsigned long len)
 {
 	struct sha256 *s = ctx;
 	const uint8_t *p = m;
