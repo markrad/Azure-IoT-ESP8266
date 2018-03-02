@@ -1,3 +1,5 @@
+#define USEDHT22 1
+
 #include <FS.h>
 
 #include <MQTTClient.h>
@@ -8,6 +10,12 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
+
+#ifdef USEDHT22
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+#endif
 
 
 #include "sha256.h"
@@ -35,6 +43,13 @@ const int BLINKER = BUILTIN_LED;
 const int BLINKTIME = 700;
 const int BLINKOFF = HIGH;
 const int BLINKON = LOW;              // Set to BLINKOFF to disable LED
+
+#ifdef USEDHT22
+#define DHTPIN 2
+#define DHTTYPE DHT22
+
+DHT dht(DHTPIN, DHTTYPE);
+#endif
 
 WiFiUDP ntpUDP;
 WiFiClientSecure net;
@@ -84,19 +99,6 @@ void dump_buffer(uint8_t length, unsigned char *buffer)
 }
 }
 */
-
-//
-// Included for debug print of binary arrays
-void printBinary(uint8_t *data, size_t dataLength)
-{
-  for (int i = 0; i < dataLength; i++)
-  {
-    Serial.print("0123456789abcdef"[data[i]>>4]);
-    Serial.print("0123456789abcdef"[data[i]&0xf]);
-  }
-  
-  Serial.println();
-}
 
 //void softwareReboot()
 //{
@@ -311,6 +313,12 @@ void loop() {
   static uint32_t missedMessageCount = 0;
   static uint32_t ledOffAt = 0;
   uint32_t currMillis;
+
+#ifdef USEDHT22
+  double temp;
+  double humidity;
+  char convBuf[20];
+#endif
   
   while (!timeClient.update())
   {
@@ -346,24 +354,49 @@ void loop() {
   if (currMillis - lastMsg > 3000)
   {
     lastMsg = currMillis;
-    String msg = "{ \"counter\": " + String(counter++) + ", \"epoch\": " + String(timeClient.getEpochTime()) + ", \"millis\": " + String(currMillis) + " }";
-    
-    if (!client.publish(pubTopic.c_str(), msg.c_str(), false, 1))
-    {
-      Serial.println("Publish failed");
 
-      if (++missedMessageCount > MISSEDTOOMANY)
-      {
-        missedMessageCount = 0;
-        client.disconnect();
-        setupMQTT(INTERVAL);
-      }
+    String msg;
+    bool skipMsg = false;
+
+#ifdef USEDHT22
+    temp = dht.readTemperature();
+    humidity = dht.readHumidity();
+
+    if (isnan(temp) || isnan(humidity))
+    {
+      Serial.println("Bad reading from DHT22 - message skipped");
+      skipMsg = true;
     }
     else
     {
-      missedMessageCount = 0;
-      digitalWrite(BLINKER, BLINKON);
-      ledOffAt = currMillis + BLINKTIME;
+      msg = "{ \"deviceid\": " + String(csHelper->getKeywordValue("deviceid")) +
+            " \"status\": { \"temperature\": " + dtostrf(dht.convertCtoF(temp), 4, 2, convBuf) +
+            " \"humidity\": " + dtostrf(humidity, 4, 2, convBuf) +
+            " } }";
+      Serial.println(msg);
+    }
+#else    
+    msg = "{ \"counter\": " + String(counter++) + ", \"epoch\": " + String(timeClient.getEpochTime()) + ", \"millis\": " + String(currMillis) + " }";
+#endif  
+    if (!skipMsg)
+    {  
+      if (!client.publish(pubTopic.c_str(), msg.c_str(), false, 1))
+      {
+        Serial.println("Publish failed");
+  
+        if (++missedMessageCount > MISSEDTOOMANY)
+        {
+          missedMessageCount = 0;
+          client.disconnect();
+          setupMQTT(INTERVAL);
+        }
+      }
+      else
+      {
+        missedMessageCount = 0;
+        digitalWrite(BLINKER, BLINKON);
+        ledOffAt = currMillis + BLINKTIME;
+      }
     }
   }
 }
